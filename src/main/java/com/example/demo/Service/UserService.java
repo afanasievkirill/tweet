@@ -1,4 +1,4 @@
-package com.example.demo.Service;
+package com.example.demo.service;
 
 
 import com.example.demo.model.Role;
@@ -11,8 +11,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.Collections;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -40,12 +40,7 @@ public class UserService implements UserDetailsService {
         user.setRoles(Collections.singleton(Role.USER));
         user.setActivationCode(UUID.randomUUID().toString());
         userRepo.save(user);
-        String message = String.format("Hello %s! \n" +
-                "Wellcome to Tweet. Please visit to link http://localhost:8080/activate/%s"
-                , user.getUsername(), user.getActivationCode());
-        if(!StringUtils.isEmpty(user.getEmail())){
-            mailSender.send(user.getEmail(), "Activation code", message);
-        }
+        sendMessage(user);
         return true;
     }
 
@@ -58,5 +53,51 @@ public class UserService implements UserDetailsService {
         userRepo.save(user);
 
         return true;
+    }
+
+    public List<User> findAll() {
+        return userRepo.findAll();
+    }
+
+    public void saveUser(User user, String username, Map<String, String> form) {
+        Set<String> roles = Arrays.stream(Role.values())
+                .map(Role::name)
+                .collect(Collectors.toSet());
+        user.getRoles().clear();
+        for(String key : form.keySet()){
+            if(roles.contains(key)){
+                user.getRoles().add(Role.valueOf(key));
+            }
+        }
+        user.setUsername(username);
+        userRepo.save(user);
+    }
+
+    public void updateProfile(User user, String password, String email) {
+        String userEmail = user.getEmail();
+        boolean isEmailChange = (email != null && !email.equals(userEmail))
+                ||(userEmail != null && !userEmail.equals(email));
+        if(isEmailChange){
+            user.setEmail(email);
+            if(!StringUtils.isEmpty(email)){
+                user.setActivationCode(UUID.randomUUID().toString());
+            }
+        }
+        if(!StringUtils.isEmpty(password)){
+            user.setPassword(password);
+        }
+        userRepo.save(user);
+        if(isEmailChange) {
+            sendMessage(user);
+        }
+    }
+
+    private void sendMessage(User user) {
+        String message = String.format("Hello %s! \n" +
+                        "Wellcome to Tweet. Please visit to link http://localhost:8080/activate/%s"
+                , user.getUsername(), user.getActivationCode());
+        if(!StringUtils.isEmpty(user.getEmail())){
+            mailSender.send(user.getEmail(), "Activation code", message);
+        }
     }
 }
